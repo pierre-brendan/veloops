@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Veloops</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --accent: #ff4500;
+      --accent-light: #ff6b35;
+      --accent-lighter: #ff8c42;
+      --card-from: #1a1a1a;
+      --card-to: #2a2a2a;
+      --font: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font); }
+    body { background: var(--bg); color: #fff; padding: 1rem; }
+    h1, h2 { color: var(--accent); margin-bottom: 1rem; }
+    .container { max-width: 900px; margin: auto; }
+    .card {
+      background: linear-gradient(145deg, var(--card-from), var(--card-to));
+      padding: 1rem; border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      margin-bottom: 1.5rem; transition: transform 0.2s;
+    }
+    .card:hover { transform: translateY(-4px); }
+    select, input, textarea, button {
+      padding: 0.5rem; margin: 0.5rem 0; border: none; border-radius: 8px;
+      background: #1f1f1f; color: #fff; width: 100%;
+    }
+    button { background: var(--accent); cursor: pointer; transition: 0.3s; }
+    button:hover { background: var(--accent-light); }
+    .step { display: none; }
+    .step.active { display: block; animation: fadeIn 0.5s ease-in; }
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+    .badge { padding: 0.25em 0.5em; border-radius: 4px; font-size: 0.8em; }
+    .novice { background: red; }
+    .intermediate { background: orange; }
+    .advanced { background: blue; }
+    .experienced { background: green; }
+    .step-indicator { display: flex; justify-content: space-between; margin: 1rem 0; }
+    .step-indicator div { flex: 1; text-align: center; padding: 0.5rem; border-bottom: 2px solid #333; }
+    .step-indicator .active { border-color: var(--accent); color: var(--accent); }
+    .group-card { margin-bottom: 1rem; border-left: 4px solid var(--accent); padding-left: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Velo Official</h1>
+
+    <div class="step-indicator">
+      <div id="ind1" class="active">1. Configure</div>
+      <div id="ind2">2. Riders</div>
+      <div id="ind3">3. Groups</div>
+    </div>
+
+    <!-- Step 1: Configuration -->
+    <div id="step1" class="step active card">
+      <h2>Race Configuration</h2>
+      <label>Min Group Size (2-5): <input id="minSize" type="number" value="3" min="2" max="5"></label>
+      <label>Max Group Size (4-8): <input id="maxSize" type="number" value="6" min="4" max="8"></label>
+      <label>Max Time Difference (1.0 - 3.0 sec): <input id="maxDiff" type="number" value="2.0" step="0.1" min="1" max="3"></label>
+      <p style="font-size: 0.9em; opacity: 0.7">Note: Experience levels may adjust time thresholds.</p>
+      <button onclick="advanceToStep2()">Next</button>
+    </div>
+
+    <!-- Step 2: Input -->
+    <div id="step2" class="step card">
+      <h2>Rider Entry</h2>
+      <h3>Method A: Paste Names</h3>
+      <textarea id="namePaste" rows="6" placeholder="e.g. Jane Doe, John Smith..."></textarea>
+      <button onclick="processPastedNames()">Process Names</button>
+      <h3>Method B: Upload CSV</h3>
+      <input type="file" id="csvUpload" accept=".csv" onchange="processCSV(event)">
+      <h3>Method C: Manual Count</h3>
+      <label>Number of Riders (3-50): <input id="riderCount" type="number" min="3" max="50"></label>
+      <button onclick="generateBlankRiderForms()">Generate Blank Forms</button>
+    </div>
+
+    <!-- Step 3: Completion and Grouping -->
+    <div id="step3" class="step card">
+      <h2>Enter Times & Experience</h2>
+      <div id="riderForms"></div>
+      <div id="progress"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="results" class="step card"></div>
+  </div>
+
+  <script>
+    let step = 1;
+    let riders = [];
+    const expLevels = {
+      "Novice": 1.08,
+      "Intermediate": 1.03,
+      "Advanced": 1.0,
+      "Experienced Racer": 0.96
+    };
+    const badges = {
+      "Novice": "novice",
+      "Intermediate": "intermediate",
+      "Advanced": "advanced",
+      "Experienced Racer": "experienced"
+    };
+
+    function advanceToStep2() {
+      step = 2;
+      document.getElementById('step1').classList.remove('active');
+      document.getElementById('step2').classList.add('active');
+      document.getElementById('ind1').classList.remove('active');
+      document.getElementById('ind2').classList.add('active');
+    }
+
+    function processPastedNames() {
+      const raw = document.getElementById('namePaste').value;
+      const names = raw.split(/[\n,]+/).map(n => n.trim()).filter(n => n);
+      riders = names.map(n => ({ name: n, time: '', experience: '' }));
+      buildRiderForms();
+    }
+
+    function generateBlankRiderForms() {
+      const count = parseInt(document.getElementById('riderCount').value);
+      if (isNaN(count) || count < 3 || count > 50) return;
+      riders = Array.from({ length: count }, () => ({ name: '', time: '', experience: '' }));
+      buildRiderForms();
+    }
+
+    function buildRiderForms() {
+      step = 3;
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step3').classList.add('active');
+      document.getElementById('ind2').classList.remove('active');
+      document.getElementById('ind3').classList.add('active');
+      const container = document.getElementById('riderForms');
+      container.innerHTML = '';
+      riders.forEach((r, i) => {
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <label>Name: <input value="${r.name}" ${r.name ? 'readonly' : ''} onchange="updateRider(${i}, 'name', this.value)"></label>
+          <label>Time (s): <input type="number" min="5" max="30" step="0.01" onchange="updateRider(${i}, 'time', this.value)"></label>
+          <label>Experience: 
+            <select onchange="updateRider(${i}, 'experience', this.value)">
+              <option value="">Select...</option>
+              ${Object.keys(expLevels).map(level => `<option>${level}</option>`).join('')}
+            </select>
+          </label>
+          <hr style="opacity: 0.2">
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateRider(i, key, value) {
+      riders[i][key] = value;
+      const filled = riders.filter(r => r.name && r.time && r.experience).length;
+      const total = riders.length;
+      document.getElementById('progress').innerText = `Completion: ${filled}/${total}`;
+      if (filled === total) groupRiders();
+    }
+
+    function groupRiders() {
+      const minSize = parseInt(document.getElementById('minSize').value);
+      const maxSize = parseInt(document.getElementById('maxSize').value);
+      let maxDiff = parseFloat(document.getElementById('maxDiff').value);
+
+      // Calculate adjusted times
+      riders.forEach(r => {
+        r.rawTime = parseFloat(r.time);
+        r.adjusted = r.rawTime * expLevels[r.experience];
+      });
+
+      // Adjust max difference based on experience composition
+      const numExperienced = riders.filter(r => r.experience === 'Experienced Racer').length;
+      const numNovices = riders.filter(r => r.experience === 'Novice').length;
+
+      if (numExperienced / riders.length >= 0.3) maxDiff *= 1.3;
+      if (numNovices / riders.length >= 0.4) maxDiff *= 0.8;
+
+      // Sort riders by adjusted time
+      riders.sort((a, b) => a.adjusted - b.adjusted);
+
+      // Improved grouping algorithm
+      const groups = createOptimalGroups(riders, minSize, maxSize, maxDiff);
+
+      showResults(groups, maxDiff);
+    }
+
+    function createOptimalGroups(sortedRiders, minSize, maxSize, maxDiff) {
+      const groups = [];
+      let remaining = [...sortedRiders];
+      
+      while (remaining.length > 0) {
+        // If remaining riders are less than minSize, merge with the last group
+        if (remaining.length < minSize && groups.length > 0) {
+          const lastGroup = groups[groups.length - 1];
+          // Check if we can merge without exceeding maxSize
+          if (lastGroup.length + remaining.length <= maxSize) {
+            // Check if the time difference is acceptable
+            const timeDiff = remaining[remaining.length - 1].adjusted - lastGroup[0].adjusted;
+            if (timeDiff <= maxDiff * 1.5) { // Allow slightly more flexibility for merging
+              lastGroup.push(...remaining);
+              remaining = [];
+              break;
+            }
+          }
+          
+          // If we can't merge with the last group, try to redistribute
+          const redistributed = redistributeRiders(groups, remaining, minSize, maxSize, maxDiff);
+          if (redistributed) {
+            remaining = [];
+            break;
+          }
+        }
+        
+        // Create a new group starting with the fastest remaining rider
+        const newGroup = [remaining[0]];
+        let i = 1;
+        
+        // Add riders to the group while respecting constraints
+        while (i < remaining.length && newGroup.length < maxSize) {
+          const timeDiff = remaining[i].adjusted - newGroup[0].adjusted;
+          if (timeDiff <= maxDiff) {
+            newGroup.push(remaining[i]);
+            i++;
+          } else {
+            break;
+          }
+        }
+        
+        // Ensure minimum group size
+        while (newGroup.length < minSize && i < remaining.length) {
+          newGroup.push(remaining[i]);
+          i++;
+        }
+        
+        // If we still don't have minimum size and this would be the last group
+        if (newGroup.length < minSize && remaining.length - newGroup.length < minSize) {
+          // Take all remaining riders
+          newGroup.push(...remaining.slice(i));
+          i = remaining.length;
+        }
+        
+        groups.push(newGroup);
+        remaining = remaining.slice(newGroup.length);
+      }
+      
+      return groups;
+    }
+
+    function redistributeRiders(existingGroups, remainingRiders, minSize, maxSize, maxDiff) {
+      // Try to redistribute riders from existing groups to accommodate remaining riders
+      for (let i = 0; i < existingGroups.length; i++) {
+        const group = existingGroups[i];
+        if (group.length > minSize) {
+          // Try to move some riders from this group to make room
+          const ridersToMove = Math.min(group.length - minSize, remainingRiders.length);
+          if (ridersToMove > 0) {
+            const movedRiders = group.splice(group.length - ridersToMove, ridersToMove);
+            remainingRiders.unshift(...movedRiders);
+            remainingRiders.sort((a, b) => a.adjusted - b.adjusted);
+            
+            // Try to create a new group with the combined riders
+            if (remainingRiders.length >= minSize) {
+              const newGroup = remainingRiders.splice(0, Math.min(maxSize, remainingRiders.length));
+              existingGroups.push(newGroup);
+              return remainingRiders.length === 0;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    function showResults(groups, adjustedDiff) {
+      const container = document.getElementById('results');
+      container.classList.add('active');
+      const totalGroups = groups.length;
+      const avgSize = (riders.length / totalGroups).toFixed(2);
+      const spreads = groups.map(g => g[g.length - 1].adjusted - g[0].adjusted);
+      const maxSpread = Math.max(...spreads).toFixed(2);
+
+      // Validation check
+      const totalRidersInGroups = groups.reduce((sum, group) => sum + group.length, 0);
+      const minGroupSize = Math.min(...groups.map(g => g.length));
+      const maxGroupSize = Math.max(...groups.map(g => g.length));
+
+      container.innerHTML = `
+        <h2>Results</h2>
+        <p>Total Groups: ${totalGroups}</p>
+        <p>Average Group Size: ${avgSize}</p>
+        <p>Group Size Range: ${minGroupSize} - ${maxGroupSize}</p>
+        <p>Max Time Spread: ${maxSpread}s</p>
+        <p>Applied Max Difference: ${adjustedDiff.toFixed(2)}s</p>
+        <p>Total Riders Grouped: ${totalRidersInGroups}/${riders.length}</p>
+        <hr>
+      `;
+
+      groups.forEach((group, idx) => {
+        const spread = (group[group.length - 1].adjusted - group[0].adjusted).toFixed(2);
+        const expCount = group.filter(r => r.experience === 'Experienced Racer').length;
+        const noviceCount = group.filter(r => r.experience === 'Novice').length;
+        const dynamics = spread < 1 ? 'tight and fast-paced' : 'tactical with varied pacing';
+
+        const div = document.createElement('div');
+        div.className = 'group-card';
+        div.innerHTML = `
+          <h3>Group ${idx + 1}</h3>
+          <p>Riders: ${group.length} | Spread: ${spread}s | Experienced: ${expCount} | Novice: ${noviceCount}</p>
+          <ul>
+            ${group.map(r => `<li>${r.name} <span class="badge ${badges[r.experience]}">${r.experience}</span> - Raw: ${r.rawTime}s, Adj: ${r.adjusted.toFixed(2)}s</li>`).join('')}
+          </ul>
+          <p><em>This group is ${dynamics}, with ${expCount} experienced and ${noviceCount} novice riders.</em></p>
+        `;
+        container.appendChild(div);
+      });
+      container.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function processCSV(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const lines = e.target.result.split('\n');
+        riders = lines.map(line => {
+          const [name, time, experience] = line.split(',').map(s => s.trim());
+          return { name, time, experience };
+        }).filter(r => r.name);
+        buildRiderForms();
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
